@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>스탑워치</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
+
+    :root {
+      --bg: #e0e5ec;
+      --shadow-light: #ffffff;
+      --shadow-dark: #a3b1c6;
+      --text-main: #4a5568;
+      --text-muted: #8a9bb0;
+      --accent-green: #4caf7d;
+      --accent-red: #e05c5c;
+      --accent-blue: #5b8dee;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      background: var(--bg);
+      border-radius: 32px;
+      padding: 48px 40px 40px;
+      box-shadow: 12px 12px 24px var(--shadow-dark), -12px -12px 24px var(--shadow-light);
+      text-align: center;
+      width: 360px;
+    }
+
+    .display-wrap {
+      background: var(--bg);
+      border-radius: 20px;
+      padding: 28px 16px 20px;
+      box-shadow: inset 6px 6px 14px var(--shadow-dark), inset -6px -6px 14px var(--shadow-light);
+      margin-bottom: 40px;
+    }
+
+    .display {
+      font-size: 4.6rem;
+      font-weight: 300;
+      letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-main);
+      line-height: 1;
+    }
+
+    .display .ms {
+      font-size: 2.4rem;
+      color: var(--text-muted);
+    }
+
+    .buttons {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+    }
+
+    button {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
+      transition: box-shadow 0.15s, color 0.15s;
+      letter-spacing: 0.02em;
+    }
+
+    button:hover {
+      color: var(--text-main);
+    }
+
+    button:active,
+    button.pressed {
+      box-shadow: inset 4px 4px 10px var(--shadow-dark), inset -4px -4px 10px var(--shadow-light);
+    }
+
+    #btn-start {
+      color: var(--accent-green);
+      box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
+    }
+
+    #btn-start.running {
+      color: var(--accent-red);
+    }
+
+    #btn-lap {
+      color: var(--accent-blue);
+    }
+
+    .laps {
+      margin-top: 32px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .laps::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .laps::-webkit-scrollbar-thumb {
+      background: var(--shadow-dark);
+      border-radius: 2px;
+    }
+
+    .lap-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 8px;
+      border-radius: 10px;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      background: var(--bg);
+      box-shadow: 3px 3px 8px var(--shadow-dark), -3px -3px 8px var(--shadow-light);
+    }
+
+    .lap-item.fastest { color: var(--accent-green); }
+    .lap-item.slowest { color: var(--accent-red); }
+
+    .lap-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      opacity: 0.7;
+      min-width: 44px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="display-wrap">
+      <div class="display">
+        <span id="time">00:00</span><span class="ms">.<span id="ms">00</span></span>
+      </div>
+    </div>
+    <div class="buttons">
+      <button id="btn-reset">초기화</button>
+      <button id="btn-start">시작</button>
+      <button id="btn-lap">랩</button>
+    </div>
+    <div class="laps" id="laps"></div>
+  </div>
+
+  <script>
+    let startTime = 0;
+    let elapsed = 0;
+    let timerInterval = null;
+    let running = false;
+    let laps = [];
+
+    const display = document.getElementById('time');
+    const msDisplay = document.getElementById('ms');
+    const btnStart = document.getElementById('btn-start');
+    const btnReset = document.getElementById('btn-reset');
+    const btnLap = document.getElementById('btn-lap');
+    const lapsContainer = document.getElementById('laps');
+
+    function format(ms) {
+      const totalMs = Math.floor(ms);
+      const centiseconds = Math.floor((totalMs % 1000) / 10);
+      const seconds = Math.floor(totalMs / 1000) % 60;
+      const minutes = Math.floor(totalMs / 60000);
+      return {
+        main: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
+        ms: String(centiseconds).padStart(2, '0')
+      };
+    }
+
+    function updateDisplay() {
+      const now = running ? elapsed + (Date.now() - startTime) : elapsed;
+      const f = format(now);
+      display.textContent = f.main;
+      msDisplay.textContent = f.ms;
+    }
+
+    function renderLaps() {
+      if (laps.length === 0) { lapsContainer.innerHTML = ''; return; }
+
+      const times = laps.map(l => l.split);
+      const min = Math.min(...times);
+      const max = Math.max(...times);
+
+      lapsContainer.innerHTML = laps.slice().reverse().map((lap, i) => {
+        const idx = laps.length - i;
+        const f = format(lap.total);
+        const sf = format(lap.split);
+        let cls = '';
+        if (laps.length > 1) {
+          if (lap.split === min) cls = 'fastest';
+          else if (lap.split === max) cls = 'slowest';
+        }
+        return `<div class="lap-item ${cls}">
+          <span class="lap-label">랩 ${idx}</span>
+          <span>${sf.main}.${sf.ms}</span>
+          <span>${f.main}.${f.ms}</span>
+        </div>`;
+      }).join('');
+    }
+
+    btnStart.addEventListener('click', () => {
+      if (!running) {
+        startTime = Date.now();
+        timerInterval = setInterval(updateDisplay, 10);
+        running = true;
+        btnStart.textContent = '정지';
+        btnStart.classList.add('running');
+      } else {
+        elapsed += Date.now() - startTime;
+        clearInterval(timerInterval);
+        running = false;
+        btnStart.textContent = '시작';
+        btnStart.classList.remove('running');
+        updateDisplay();
+      }
+    });
+
+    btnReset.addEventListener('click', () => {
+      clearInterval(timerInterval);
+      running = false;
+      elapsed = 0;
+      laps = [];
+      btnStart.textContent = '시작';
+      btnStart.classList.remove('running');
+      display.textContent = '00:00';
+      msDisplay.textContent = '00';
+      lapsContainer.innerHTML = '';
+    });
+
+    btnLap.addEventListener('click', () => {
+      if (!running && elapsed === 0) return;
+      const now = running ? elapsed + (Date.now() - startTime) : elapsed;
+      const prev = laps.length > 0 ? laps[laps.length - 1].total : 0;
+      laps.push({ total: now, split: now - prev });
+      renderLaps();
+    });
+  </script>
+</body>
+</html>
